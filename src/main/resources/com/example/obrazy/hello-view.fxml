@@ -44,7 +44,7 @@
                 <items>
                     <FXCollections fx:factory="observableArrayList">
                         <String fx:value="Negatyw" />
-                        <String fx:value="test2" />
+                        <String fx:value="Progowanie" />
                         <String fx:value="test3" />
                     </FXCollections>
                 </items>

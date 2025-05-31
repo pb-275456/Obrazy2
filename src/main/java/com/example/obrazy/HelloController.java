@@ -66,10 +66,10 @@ public class HelloController {
             switch (operations.getValue()) {
                 case "Negatyw":
                     negative();
-                    imageChanged = true;
                     break;
 
                 case "Progowanie":
+                    thresholdDialog();
                     break;
                 }
 
@@ -378,7 +378,6 @@ public class HelloController {
         return output;
     }
 
-
     private void rotateImage(double angle) {
         if(!imageChanged)
             changedImage = originalImage;
@@ -409,7 +408,7 @@ public class HelloController {
             // tworzymy kopie orginalu
             BufferedImage bufferedImage = SwingFXUtils.fromFXImage(originalImage, null);
 
-            // Apply negative effect
+            // negatyw
             for (int y = 0; y < bufferedImage.getHeight(); y++) {
                 for (int x = 0; x < bufferedImage.getWidth(); x++) {
                     int rgb = bufferedImage.getRGB(x, y);
@@ -421,7 +420,7 @@ public class HelloController {
                 }
             }
 
-            // Update processed image
+            // updatujemy do wyswietlenia
             changedImage = SwingFXUtils.toFXImage(bufferedImage, null);
             changedImageView.setImage(changedImage);
             imageChanged = true;
@@ -433,6 +432,84 @@ public class HelloController {
         }
     }
 
+    private void thresholdDialog() {
+        // Create modal dialog
+        Dialog<Integer> dialog = new Dialog<>();
+        dialog.setTitle("Progowanie obrazu");
+        dialog.initModality(Modality.APPLICATION_MODAL);
+
+        // Create numeric input
+        Spinner<Integer> thresholdSpinner = new Spinner<>(0, 255, 100);
+        thresholdSpinner.setEditable(true);
+        thresholdSpinner.getValueFactory().setValue(128);
+
+        // Add buttons
+        ButtonType applyButtonType = new ButtonType("Wykonaj progowanie", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(applyButtonType, ButtonType.CANCEL);
+
+        // Layout
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+        grid.setPadding(new Insets(20, 10, 10, 10));
+
+        grid.add(new Label("Wartość progu (0-255):"), 0, 0);
+        grid.add(thresholdSpinner, 1, 0);
+
+        dialog.getDialogPane().setContent(grid);
+
+        // Set result converter
+        dialog.setResultConverter(dialogButton -> {
+            if (dialogButton == applyButtonType) {
+                return thresholdSpinner.getValue();
+            }
+            return null;
+        });
+
+        // Process result
+        Optional<Integer> result = dialog.showAndWait();
+        result.ifPresent(threshold -> {
+            try {
+                threshold(threshold);
+                showSuccessToast("Progowanie zostało przeprowadzone pomyślnie!");
+            } catch (Exception e) {
+                showErrorToast("Nie udało się wykonać progowania");
+                e.printStackTrace();
+            }
+        });
+    }
+
+    private void threshold(int threshold) {
+        try {
+            BufferedImage bufferedImage = SwingFXUtils.fromFXImage(originalImage, null);
+
+            // zamieniamy na czarno - bialy
+            BufferedImage grayImage = new BufferedImage(
+                    bufferedImage.getWidth(),
+                    bufferedImage.getHeight(),
+                    BufferedImage.TYPE_BYTE_GRAY
+            );
+            grayImage.getGraphics().drawImage(bufferedImage, 0, 0, null);
+
+            // progowanie
+            for (int y = 0; y < grayImage.getHeight(); y++) {
+                for (int x = 0; x < grayImage.getWidth(); x++) {
+                    int rgb = grayImage.getRGB(x, y);
+                    int gray = rgb & 0xFF;
+                    int newValue = gray > threshold ? 255 : 0;
+                    grayImage.setRGB(x, y, (newValue << 16) | (newValue << 8) | newValue);
+                }
+            }
+
+            // Update processed image
+            changedImage = SwingFXUtils.toFXImage(grayImage, null);
+            changedImageView.setImage(changedImage);
+            imageChanged = true;
+
+        } catch (Exception e) {
+            throw new RuntimeException("Thresholding failed", e);
+        }
+    }
 
     private void showSuccessToast(String message) {
         Notifications.create()
