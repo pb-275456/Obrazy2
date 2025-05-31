@@ -14,9 +14,9 @@
     </padding>
 
     <top>
-        <HBox alignment="CENTER" prefHeight="100.0" prefWidth="200.0" spacing="20.0">
+        <HBox alignment="CENTER" prefHeight="60.0" prefWidth="200.0" spacing="5.0" BorderPane.alignment="TOP_CENTER">
             <children>
-                <ImageView fitHeight="150.0" fitWidth="98.0" pickOnBounds="true" preserveRatio="true">
+                <ImageView fitHeight="50.0" fitWidth="50.0" pickOnBounds="true" preserveRatio="true">
                     <image>
                         <Image url="@../../../images/logo.png" />
                     </image>
@@ -33,7 +33,7 @@
     <center>
         <VBox alignment="CENTER" prefHeight="100.0" prefWidth="200.0" spacing="20.0">
             <Label text="Hello!" />
-         <HBox alignment="CENTER" prefHeight="100.0" prefWidth="200.0">
+         <HBox alignment="CENTER">
             <children>
                <ImageView fx:id="originalImageView" fitHeight="150.0" fitWidth="200.0" pickOnBounds="true" preserveRatio="true" />
                <ImageView fx:id="changedImageView" fitHeight="150.0" fitWidth="200.0" pickOnBounds="true" preserveRatio="true" />
@@ -50,10 +50,26 @@
                 </items>
             </ComboBox>
 
-            <HBox alignment="CENTER" prefHeight="100.0" prefWidth="200.0" spacing="20.0">
+            <HBox alignment="BOTTOM_CENTER" prefHeight="100.0" prefWidth="200.0" spacing="20.0">
                 <Button fx:id="loadButton" onAction="#loadImage" text="Załaduj obraz" />
                 <Button fx:id="executeButton" onAction="#onExecuteButtonClick" text="Wykonaj" />
                 <Button fx:id="saveButton" onAction="#onSaveButtonClick" text="Zapisz" />
+                <Button fx:id="scaleButton" onAction="#onScaleButtonClick" text="Skaluj" />
+
+                <Button fx:id="rotateLeftBtn" onAction="#handleRotateLeft">
+                    <graphic>
+                        <ImageView>
+                            <Image url="@../../../images/arrow_left.png" />
+                        </ImageView>
+                    </graphic>
+                </Button>
+                <Button fx:id="rotateRightBtn" onAction="#handleRotateRight">
+                    <graphic>
+                        <ImageView>
+                            <Image url="@../../../images/arrow_right.png" />
+                        </ImageView>
+                    </graphic>
+                </Button>
             </HBox>
         </VBox>
     </center>
