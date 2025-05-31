@@ -7,9 +7,7 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.*;
-import javafx.scene.image.Image;
-import javafx.scene.image.ImageView;
-import javafx.scene.image.WritableImage;
+import javafx.scene.image.*;
 import javafx.scene.layout.GridPane;
 import javafx.scene.transform.Rotate;
 import javafx.stage.FileChooser;
@@ -38,7 +36,7 @@ public class HelloController {
     @FXML private Button rotateLeftBtn;
     @FXML private Button rotateRightBtn;
 
-    private Image currentImage;
+
     private Image originalImage;
     private Image changedImage;
     private Boolean imageChanged = false;
@@ -64,8 +62,17 @@ public class HelloController {
 
         } else {
             //jakos to potem zmienic
-            changedImageView.setImage(currentImage);
-            imageChanged = true;
+
+            switch (operations.getValue()) {
+                case "Negatyw":
+                    negative();
+                    imageChanged = true;
+                    break;
+
+                case "Progowanie":
+                    break;
+                }
+
         }
     }
 
@@ -90,12 +97,11 @@ public class HelloController {
                 // usun poprzednie wersje
                 originalImageView.setImage(null);
                 changedImageView.setImage(null);
-                currentImage = null;
+                originalImage = null;
 
                 // wczytaj nowy
-                currentImage = new Image(file.toURI().toString());
-                originalImage = currentImage;
-                originalImageView.setImage(currentImage);
+                originalImage = new Image(file.toURI().toString());
+                originalImageView.setImage(originalImage);
 
                 // odblokuj opcje
                 operations.setDisable(false);
@@ -310,6 +316,9 @@ public class HelloController {
             int newWidth = dimensions.getKey();
             int newHeight = dimensions.getValue();
 
+            System.out.println("originalImage = " + originalImage);
+            System.out.println("changedImage = " + changedImage);
+
             Image scaledImage;
             // Scaling logic here
             if (!imageChanged)
@@ -325,6 +334,16 @@ public class HelloController {
         });
     }
 
+    @FXML
+    public void handleRotateLeft() {
+        rotateImage(-90);
+    }
+
+    @FXML
+    public void handleRotateRight() {
+        rotateImage(90);
+    }
+
     private Image scaleImage(Image source, int width, int height) {
         if (width == 0 || height == 0) {
             // Preserve aspect ratio if one dimension is 0
@@ -336,24 +355,29 @@ public class HelloController {
             }
         }
 
-        return new Image(
-                source.getUrl(),
-                width,
-                height,
-                true,  // preserve ratio
-                true   // smooth filtering
-        );
+        PixelReader reader = source.getPixelReader();
+        if (reader == null) {
+            System.err.println("PixelReader is null. Cannot scale.");
+            return null;
+        }
+
+        WritableImage output = new WritableImage(width, height);
+        PixelWriter writer = output.getPixelWriter();
+
+        double scaleX = source.getWidth() / width;
+        double scaleY = source.getHeight() / height;
+
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int srcX = (int) (x * scaleX);
+                int srcY = (int) (y * scaleY);
+                writer.setArgb(x, y, reader.getArgb(srcX, srcY));
+            }
+        }
+
+        return output;
     }
 
-    @FXML
-    public void handleRotateLeft() {
-        rotateImage(-90);
-    }
-
-    @FXML
-    public void handleRotateRight() {
-        rotateImage(90);
-    }
 
     private void rotateImage(double angle) {
         if(!imageChanged)
@@ -378,6 +402,35 @@ public class HelloController {
         // Update processed image
         changedImage = rotatedImage;
         changedImageView.setImage(rotatedImage);
+    }
+
+    private void negative() {
+        try {
+            // tworzymy kopie orginalu
+            BufferedImage bufferedImage = SwingFXUtils.fromFXImage(originalImage, null);
+
+            // Apply negative effect
+            for (int y = 0; y < bufferedImage.getHeight(); y++) {
+                for (int x = 0; x < bufferedImage.getWidth(); x++) {
+                    int rgb = bufferedImage.getRGB(x, y);
+                    int r = 255 - ((rgb >> 16) & 0xFF);
+                    int g = 255 - ((rgb >> 8) & 0xFF);
+                    int b = 255 - (rgb & 0xFF);
+                    int newRgb = (r << 16) | (g << 8) | b;
+                    bufferedImage.setRGB(x, y, newRgb);
+                }
+            }
+
+            // Update processed image
+            changedImage = SwingFXUtils.toFXImage(bufferedImage, null);
+            changedImageView.setImage(changedImage);
+            imageChanged = true;
+
+            showSuccessToast("Negatyw został wygenerowany pomyślnie!");
+        } catch (Exception e) {
+            showErrorToast("Nie udało się wykonać negatywu");
+            e.printStackTrace();
+        }
     }
 
 

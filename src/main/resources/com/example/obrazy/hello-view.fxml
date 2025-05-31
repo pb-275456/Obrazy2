@@ -43,7 +43,7 @@
             <ComboBox fx:id="operations" prefWidth="150.0">
                 <items>
                     <FXCollections fx:factory="observableArrayList">
-                        <String fx:value="test1" />
+                        <String fx:value="Negatyw" />
                         <String fx:value="test2" />
                         <String fx:value="test3" />
                     </FXCollections>
