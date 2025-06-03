@@ -35,8 +35,8 @@
             <Label text="Hello!" />
          <HBox alignment="CENTER">
             <children>
-               <ImageView fx:id="originalImageView" fitHeight="200" fitWidth="200" pickOnBounds="true" preserveRatio="true" />
-               <ImageView fx:id="changedImageView" fitHeight="200" fitWidth="200" pickOnBounds="true" preserveRatio="true" />
+               <ImageView fx:id="originalImageView" pickOnBounds="true" preserveRatio="true" />
+               <ImageView fx:id="changedImageView" pickOnBounds="true" preserveRatio="true" />
             </children>
          </HBox>
 

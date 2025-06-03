@@ -1,5 +1,6 @@
 package com.example.obrazy;
 
+import javafx.beans.value.ChangeListener;
 import javafx.embed.swing.SwingFXUtils;
 import javafx.fxml.FXML;
 import javafx.geometry.Insets;
@@ -41,7 +42,6 @@ public class HelloController {
     private Image originalImage;
     private Image changedImage;
     private Boolean imageChanged = false;
-    private double totalRotation; //do obracania addytywnego
 
     private static final ForkJoinPool customPool = new ForkJoinPool(4);
 
@@ -54,7 +54,6 @@ public class HelloController {
         scaleButton.setDisable(true);
         rotateLeftBtn.setDisable(true);
         rotateRightBtn.setDisable(true);
-        totalRotation = 0;
     }
 
     @FXML
@@ -106,10 +105,14 @@ public class HelloController {
                 changedImageView.setImage(null);
                 originalImage = null;
 
-                // wczytaj nowy
+                // wczytaj nowy do image view
                 originalImage = new Image(file.toURI().toString());
                 originalImageView.setImage(originalImage);
                 imageChanged = false;
+                changedImage = null;
+
+                //update rozmiaru obrazka
+                updateImageViewSize(originalImageView, originalImage);
 
                 // odblokuj opcje
                 operations.setDisable(false);
@@ -222,7 +225,6 @@ public class HelloController {
                 showErrorToast("Nie udało się zapisać pliku " + fileName + ".jpg");
             }
         });
-
     }
 
     @FXML
@@ -232,126 +234,55 @@ public class HelloController {
         dialog.setTitle("Skalowanie Obrazu");
         dialog.initModality(Modality.APPLICATION_MODAL);
 
-        //tworzymy nowy label do pokazania informacji o braku zmiany obrazu
-        Label widthError = new Label();
-        Label heightError = new Label();
-        widthError.setStyle("-fx-text-fill: red;");
-        heightError.setStyle("-fx-text-fill: red;");
-        widthError.setVisible(false);
-        heightError.setVisible(false);
+        //tworzenie pol
+        TextField widthField = createNumericField();
+        TextField heightField = createNumericField();
+        Label widthError = createErrorLabel();
+        Label heightError = createErrorLabel();
 
-        TextField widthField = new TextField();
-        TextField heightField = new TextField();
-
-        //walidacja wpisywania liczb
-        UnaryOperator<TextFormatter.Change> numericFilter = change -> {
-            String newText = change.getControlNewText();
-            if (newText.matches("\\d*")) { //tylko liczby
-                if (!newText.isEmpty()) {
-                    int value = Integer.parseInt(newText);
-                    if (value > 3000) {
-                        return null; // do 3000
-                    }
-                }
-                return change;
-            }
-            return null;
-        };
-
-        widthField.setTextFormatter(new TextFormatter<>(new IntegerStringConverter(), 0, numericFilter));
-        heightField.setTextFormatter(new TextFormatter<>(new IntegerStringConverter(), 0, numericFilter));
-
-        // przyciski
-        ButtonType scaleButtonType = new ButtonType("Zmień rozmiar", ButtonBar.ButtonData.OK_DONE);
-        ButtonType restoreButtonType = new ButtonType("Przywróć oryginał", ButtonBar.ButtonData.OTHER);
-        dialog.getDialogPane().getButtonTypes().addAll(scaleButtonType, restoreButtonType, ButtonType.CANCEL);
-
-        // layout
         GridPane grid = new GridPane();
         grid.setHgap(10);
         grid.setVgap(10);
         grid.setPadding(new Insets(20, 10, 10, 10));
-
-        grid.add(new Label("Szerokość (px):"), 0, 0);
-        grid.add(widthField, 1, 0);
+        grid.addRow(0, new Label("Szerokość (px):"), widthField);
         grid.add(widthError, 1, 1);
-
-        grid.add(new Label("Wysokość (px):"), 0, 2);
-        grid.add(heightField, 1, 2);
+        grid.addRow(2, new Label("Wysokość (px):"), heightField);
         grid.add(heightError, 1, 3);
 
+        ButtonType scaleBtn = new ButtonType("Zmień rozmiar", ButtonBar.ButtonData.OK_DONE);
+        ButtonType restoreBtn = new ButtonType("Przywróć oryginał", ButtonBar.ButtonData.OTHER);
+        dialog.getDialogPane().getButtonTypes().addAll(scaleBtn, restoreBtn, ButtonType.CANCEL);
         dialog.getDialogPane().setContent(grid);
 
-        Node scaleBtn = dialog.getDialogPane().lookupButton(scaleButtonType);
-        scaleBtn.setDisable(true);
+        Node scaleBtnNode = dialog.getDialogPane().lookupButton(scaleBtn);
+        scaleBtnNode.setDisable(true);
 
-        BiConsumer<TextField, Label> validation = (field, errorLabel) -> {
-            field.textProperty().addListener((obs, oldVal, newVal) -> {
-                boolean bothValid = !widthField.getText().isEmpty() && !heightField.getText().isEmpty();
-                scaleBtn.setDisable(!bothValid);
-
-                if (field == widthField) {
-                    widthError.setVisible(newVal.isEmpty());
-                } else {
-                    heightError.setVisible(newVal.isEmpty());
-                }
-            });
+        ChangeListener<String> validationListener = (obs, oldVal, newVal) -> {
+            boolean valid = !widthField.getText().isEmpty() && !heightField.getText().isEmpty();
+            scaleBtnNode.setDisable(!valid);
+            widthError.setVisible(widthField.getText().isEmpty());
+            heightError.setVisible(heightField.getText().isEmpty());
         };
+        widthField.textProperty().addListener(validationListener);
+        heightField.textProperty().addListener(validationListener);
 
-        validation.accept(widthField, widthError);
-        validation.accept(heightField, heightError);
-
-        dialog.setResultConverter(dialogButton -> {
-            if (dialogButton == scaleButtonType) {
-                if (widthField.getText().isEmpty()) {
-                    widthError.setText("Pole jest wymagane");
-                    widthError.setVisible(true);
-                    return null;
-                }
-                if (heightField.getText().isEmpty()) {
-                    heightError.setText("Pole jest wymagane");
-                    heightError.setVisible(true);
-                    return null;
-                }
-
-                try {
-                    return new Pair<>(
-                            Integer.parseInt(widthField.getText()),
-                            Integer.parseInt(heightField.getText())
-                    );
-                } catch (NumberFormatException e) {
-                    return null;
-                }
-            } else if (dialogButton == restoreButtonType) {
-                return new Pair<>(
-                        (int)originalImage.getWidth(),
-                        (int)originalImage.getHeight()
-                );
+        dialog.setResultConverter(button -> {
+            if (button == scaleBtn || button == restoreBtn) {
+                int w = button == restoreBtn ? (int) originalImage.getWidth() : Integer.parseInt(widthField.getText());
+                int h = button == restoreBtn ? (int) originalImage.getHeight() : Integer.parseInt(heightField.getText());
+                return new Pair<>(w, h);
             }
             return null;
         });
 
-        Optional<Pair<Integer, Integer>> result = dialog.showAndWait();
-        result.ifPresent(dimensions -> {
-            int newWidth = dimensions.getKey();
-            int newHeight = dimensions.getValue();
-
-            Image baseImage = (changedImage != null) ? changedImage : originalImage;
-
-            System.out.println("Before scaling:");
-            System.out.println("Width: " + baseImage.getWidth());
-            System.out.println("Height: " + baseImage.getHeight());
-
-            Image scaledImage = scaleImage(baseImage, newWidth, newHeight);
-
-            System.out.println("After scaling:");
-            System.out.println("Width: " + scaledImage.getWidth());
-            System.out.println("Height: " + scaledImage.getHeight());
-
-            changedImage = scaledImage;
-            changedImageView.setImage(scaledImage);
-
-            showSuccessToast("Przeskalowano obraz do " + newWidth + "x" + newHeight + "px");
+        dialog.showAndWait().ifPresent(dim -> {
+            Image base = (changedImage != null) ? changedImage : originalImage;
+            Image scaled = scaleImage(base, dim.getKey(), dim.getValue());
+            changedImage = scaled;
+            changedImageView.setImage(scaled);
+            imageChanged = true;
+            updateImageViewSize(changedImageView, scaled);
+            showSuccessToast("Przeskalowano obraz do " + dim.getKey() + "x" + dim.getValue() + "px");
         });
     }
 
@@ -367,7 +298,7 @@ public class HelloController {
 
     private Image scaleImage(Image source, int width, int height) {
         if (width == 0 || height == 0) {
-            // Preserve aspect ratio if one dimension is 0
+
             double ratio = source.getWidth() / source.getHeight();
             if (width == 0) {
                 width = (int)(height * ratio);
@@ -376,27 +307,13 @@ public class HelloController {
             }
         }
 
-        PixelReader reader = source.getPixelReader();
-        if (reader == null) {
-            System.err.println("PixelReader is null. Cannot scale.");
-            return null;
-        }
-
-        WritableImage output = new WritableImage(width, height);
-        PixelWriter writer = output.getPixelWriter();
-
-        double scaleX = source.getWidth() / width;
-        double scaleY = source.getHeight() / height;
-
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
-                int srcX = (int) (x * scaleX);
-                int srcY = (int) (y * scaleY);
-                writer.setArgb(x, y, reader.getArgb(srcX, srcY));
-            }
-        }
-
-        return output;
+        return new Image(
+                source.getUrl(), // or source.getUrl() if it’s not null
+                width,
+                height,
+                false,  // preserveRatio
+                false   // smooth (set true if you want anti-aliasing)
+        );
     }
 
     private void rotateImage(double angle) {
@@ -534,64 +451,6 @@ public class HelloController {
         }
     }
 
-//    private void contour()
-//    {
-//        try {
-//            BufferedImage bufferedImage = SwingFXUtils.fromFXImage(originalImage, null);
-//            BufferedImage grayImage = new BufferedImage(
-//                    bufferedImage.getWidth(),
-//                    bufferedImage.getHeight(),
-//                    BufferedImage.TYPE_BYTE_GRAY
-//            );
-//            grayImage.getGraphics().drawImage(bufferedImage, 0, 0, null);
-//
-//            double[][] sobelX = {{-1, 0, 1}, {-2, 0, 2}, {-1, 0, 1}};
-//            double[][] sobelY = {{-1, -2, -1}, {0, 0, 0}, {1, 2, 1}};
-//
-//            BufferedImage result = new BufferedImage(grayImage.getWidth(), grayImage.getHeight(), BufferedImage.TYPE_BYTE_GRAY);
-//
-//            Raster grayRaster = grayImage.getRaster();
-//            WritableRaster resultRaster = result.getRaster();
-//
-//            customPool.submit(() ->
-//                    IntStream.range(1, grayImage.getHeight() - 1).parallel().forEach(y -> {
-//                            for (int x = 1; x < grayImage.getWidth() - 1; x++) {
-//                                int pixelX = 0;
-//                                int pixelY = 0;
-//
-//                                // Apply Sobel operator
-//                                for (int i = -1; i <= 1; i++) {
-//                                    for (int j = -1; j <= 1; j++) {
-//                                        int gray = grayRaster.getSample(x + j, y + i, 0);
-//                                        pixelX += (int) (gray * sobelX[i + 1][j + 1]);
-//                                        pixelY += (int) (gray * sobelY[i + 1][j + 1]);
-//                                    }
-//                                }
-//
-//                                int magnitude = (int) Math.sqrt(pixelX * pixelX + pixelY * pixelY);
-//                                magnitude = Math.min(255, Math.max(0, magnitude)); // Clamp to 0-255
-//
-//                                // Apply threshold to emphasize edges
-//                                int edgeValue = magnitude > 50 ? 255 : 0;
-//                                resultRaster.setSample(x, y, 0, edgeValue);
-//                            }
-//                        })
-//            ).get();
-//
-//            // zmien na javaFX image
-//            WritableImage fxImage = SwingFXUtils.toFXImage(result, null);
-//            changedImage = fxImage;
-//            changedImageView.setImage(fxImage);
-//            imageChanged = true;
-//
-//            showSuccessToast("Konturowanie zostało przeprowadzone pomyślnie!");
-//
-//        } catch (Exception e) {
-//            e.printStackTrace();
-//            showErrorToast("Nie udało się wykonać konturowania");
-//        }
-//    }
-
     private void contour() {
         try {
             int width = (int) originalImage.getWidth();
@@ -637,6 +496,21 @@ public class HelloController {
         }
     }
 
+    private void updateImageViewSize(ImageView imageView, Image image) {
+        double minSize = 70;
+        double maxSize = 300;
+
+        double imageWidth = image.getWidth();
+        double imageHeight = image.getHeight();
+
+        double fitWidth = Math.max(minSize, Math.min(maxSize, imageWidth));
+        double fitHeight = Math.max(minSize, Math.min(maxSize, imageHeight));
+
+        imageView.setFitWidth(fitWidth);
+        imageView.setFitHeight(fitHeight);
+        imageView.setPreserveRatio(true);
+    }
+
     private void showSuccessToast(String message) {
         Notifications.create()
                 .title("Sukces")
@@ -653,5 +527,25 @@ public class HelloController {
                 .hideAfter(Duration.seconds(3))
                 .position(Pos.CENTER)
                 .show();
+    }
+
+    private TextField createNumericField() {
+        TextField field = new TextField();
+        UnaryOperator<TextFormatter.Change> filter = change -> {
+            String text = change.getControlNewText();
+            if (text.matches("\\d*") && (text.isEmpty() || Integer.parseInt((text))<=0 || Integer.parseInt(text) <= 3000)) {
+                return change;
+            }
+            return null;
+        };
+        field.setTextFormatter(new TextFormatter<>(new IntegerStringConverter(), 0, filter));
+        return field;
+    }
+
+    private Label createErrorLabel() {
+        Label label = new Label("Pole jest wymagane");
+        label.setStyle("-fx-text-fill: red;");
+        label.setVisible(false);
+        return label;
     }
 }
