@@ -6,11 +6,11 @@ import javafx.fxml.FXML;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
+import javafx.scene.SnapshotParameters;
 import javafx.scene.control.*;
 import javafx.scene.image.*;
 import javafx.scene.layout.GridPane;
 import javafx.scene.paint.Color;
-import javafx.scene.transform.Rotate;
 import javafx.stage.FileChooser;
 import javafx.stage.Modality;
 import javafx.util.Duration;
@@ -22,10 +22,8 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.util.Optional;
-import java.util.concurrent.ForkJoinPool;
-import java.util.function.BiConsumer;
 import java.util.function.UnaryOperator;
-import java.util.stream.IntStream;
+
 
 public class HelloController {
     @FXML private ComboBox<String> operations;
@@ -43,7 +41,8 @@ public class HelloController {
     private Image changedImage;
     private Boolean imageChanged = false;
 
-    private static final ForkJoinPool customPool = new ForkJoinPool(4);
+
+    Filters filters = new Filters();
 
     @FXML
     public void initialize() {
@@ -122,8 +121,10 @@ public class HelloController {
                 rotateLeftBtn.setDisable(false);
                 rotateRightBtn.setDisable(false);
 
+                Logs.logInfo("Załadowano pomyślnie plik: " + file.getName());
                 showSuccessToast("Pomyślnie załadowano plik");
             } catch (Exception e) {
+                Logs.logError("Bład przy wczytywaniu pliku", e);
                 showErrorToast("Nie udało się załadować pliku");
             }
         }
@@ -179,7 +180,7 @@ public class HelloController {
             boolean isValid = newVal.length() >= 3;
             saveButton.setDisable(!isValid);
 
-            if (newVal.length() > 0 && newVal.length() < 3) {
+            if (!newVal.isEmpty() && newVal.length() < 3) {
                 errorLabel.setText("Wpisz co najmniej 3 znaki");
                 errorLabel.setVisible(true);
             } else {
@@ -197,13 +198,11 @@ public class HelloController {
         dialog.showAndWait().ifPresent(fileName -> {
             try {
                 File picturesDir = new File(System.getProperty("user.home"), "Desktop");
-                if (!picturesDir.exists()) {
-                    picturesDir.mkdirs();
-                }
 
                 File outputFile = new File(picturesDir, fileName + ".jpg");
 
                 if (outputFile.exists()) {
+                    Logs.logWarning("Plik już istnieje:" + fileName);
                     showErrorToast("Plik " + fileName + ".jpg już istnieje...");
                     return;
                 }
@@ -217,11 +216,14 @@ public class HelloController {
                 rgbImage.getGraphics().drawImage(bImage, 0, 0, null);
 
                 if (ImageIO.write(rgbImage, "jpg", outputFile)) {
+                    Logs.logInfo("Pomyślnie zapisano pliku: " + fileName);
                     showSuccessToast("Zapisano obraz w pliku " + fileName + ".jpg");
                 } else {
+                    Logs.logWarning("Nie udało zapisać się pliku: " + fileName);
                     showErrorToast("Nie udało się zapisać pliku " + fileName + ".jpg");
                 }
             } catch (IOException e) {
+                Logs.logError("Nie udało się zapisać pliku: ", e);
                 showErrorToast("Nie udało się zapisać pliku " + fileName + ".jpg");
             }
         });
@@ -277,11 +279,13 @@ public class HelloController {
 
         dialog.showAndWait().ifPresent(dim -> {
             Image base = (changedImage != null) ? changedImage : originalImage;
-            Image scaled = scaleImage(base, dim.getKey(), dim.getValue());
-            changedImage = scaled;
-            changedImageView.setImage(scaled);
+
+            changedImage = filters.scaleImage(base, dim.getKey(), dim.getValue());
+            changedImageView.setImage(changedImage);
             imageChanged = true;
-            updateImageViewSize(changedImageView, scaled);
+            updateImageViewSize(changedImageView, changedImage);
+
+            Logs.logInfo("Udało się przeskalować obraz");
             showSuccessToast("Przeskalowano obraz do " + dim.getKey() + "x" + dim.getValue() + "px");
         });
     }
@@ -296,96 +300,54 @@ public class HelloController {
         rotateImage(90);
     }
 
-    private Image scaleImage(Image source, int width, int height) {
-        if (width == 0 || height == 0) {
+    public void rotateImage(double angle) {
+        Image currentImage = (changedImage != null) ? changedImage : originalImage;
 
-            double ratio = source.getWidth() / source.getHeight();
-            if (width == 0) {
-                width = (int)(height * ratio);
-            } else {
-                height = (int)(width / ratio);
-            }
-        }
+        ImageView view = new ImageView(currentImage);
+        view.setRotate(angle);
 
-        return new Image(
-                source.getUrl(), // or source.getUrl() if it’s not null
-                width,
-                height,
-                false,  // preserveRatio
-                false   // smooth (set true if you want anti-aliasing)
-        );
-    }
+        SnapshotParameters params = new SnapshotParameters();
+        params.setFill(Color.TRANSPARENT);
 
-    private void rotateImage(double angle) {
-        try {
-            if (!imageChanged)
-                changedImage = originalImage;
-
-            BufferedImage image = SwingFXUtils.fromFXImage(changedImage, null);
-
-            BufferedImage rotatedImage;
-            if(angle%180 == 0) {
-                rotatedImage = new BufferedImage(image.getWidth(), image.getHeight(), image.getType());
-            }
-            else{
-                rotatedImage = new BufferedImage(image.getHeight(), image.getWidth(), image.getType());
-            }
-
-            java.awt.Graphics2D graphics = rotatedImage.createGraphics();
-            graphics.rotate(Math.toRadians(angle), image.getWidth() / 2.0, image.getHeight() / 2.0);
-            graphics.drawImage(image, 0, 0, null);
-            graphics.dispose();
-
-            changedImage = SwingFXUtils.toFXImage(rotatedImage, null);
-            changedImageView.setImage(changedImage);
-            imageChanged = true;
-        }
-        catch (Exception e) {showErrorToast("Nie można obrócić obrazka");}
+        WritableImage result = view.snapshot(params, null);
+        changedImage = result;
+        changedImageView.setImage(result);
+        updateImageViewSize(changedImageView, changedImage);
     }
 
     private void negative() {
         try {
-            // tworzymy kopie orginalu
-            BufferedImage bufferedImage = SwingFXUtils.fromFXImage(originalImage, null);
-
-            // negatyw
-            customPool.submit(() ->
-                    IntStream.range(0, bufferedImage.getHeight()).parallel().forEach(y -> {
-                for (int x = 0; x < bufferedImage.getWidth(); x++) {
-                    int rgb = bufferedImage.getRGB(x, y);
-                    int r = 255 - ((rgb >> 16) & 0xFF);
-                    int g = 255 - ((rgb >> 8) & 0xFF);
-                    int b = 255 - (rgb & 0xFF);
-                    int newRgb = (r << 16) | (g << 8) | b;
-                    bufferedImage.setRGB(x, y, newRgb);
-                }
-            })).get();
+            if (!imageChanged)
+                changedImage = originalImage;
 
             // updatujemy do wyswietlenia
-            changedImage = SwingFXUtils.toFXImage(bufferedImage, null);
+            changedImage = filters.applyNegative(changedImage);
             changedImageView.setImage(changedImage);
+            updateImageViewSize(changedImageView, changedImage);
             imageChanged = true;
 
+            Logs.logInfo("Udało się wykonać negatyw");
             showSuccessToast("Negatyw został wygenerowany pomyślnie!");
         } catch (Exception e) {
+            Logs.logError("Nie udało się wykonać negatywu: ", e);
             showErrorToast("Nie udało się wykonać negatywu");
         }
     }
 
     private void thresholdDialog() {
-        // Create modal dialog
+        //dialog
         Dialog<Integer> dialog = new Dialog<>();
         dialog.setTitle("Progowanie obrazu");
         dialog.initModality(Modality.APPLICATION_MODAL);
 
-        // Create numeric input
+        // wejscie numeryczne
         Spinner<Integer> thresholdSpinner = new Spinner<>(0, 255, 100);
         thresholdSpinner.setEditable(true);
         thresholdSpinner.getValueFactory().setValue(128);
 
-        // Add buttons
-        ButtonType applyButtonType = new ButtonType("Wykonaj progowanie", ButtonBar.ButtonData.OK_DONE);
-        dialog.getDialogPane().getButtonTypes().addAll(applyButtonType, ButtonType.CANCEL);
+        // przyciski
+        ButtonType applyButton = new ButtonType("Wykonaj progowanie", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(applyButton, ButtonType.CANCEL);
 
         // Layout
         GridPane grid = new GridPane();
@@ -398,21 +360,22 @@ public class HelloController {
 
         dialog.getDialogPane().setContent(grid);
 
-        // Set result converter
         dialog.setResultConverter(dialogButton -> {
-            if (dialogButton == applyButtonType) {
+            if (dialogButton == applyButton) {
                 return thresholdSpinner.getValue();
             }
             return null;
         });
 
-        // Process result
+        // zwrot wyniku -> threshold
         Optional<Integer> result = dialog.showAndWait();
         result.ifPresent(threshold -> {
             try {
                 threshold(threshold);
+                Logs.logInfo("Udało się wykonać progowanie");
                 showSuccessToast("Progowanie zostało przeprowadzone pomyślnie!");
             } catch (Exception e) {
+                Logs.logError("Nie udało się wykonać progowania:", e);
                 showErrorToast("Nie udało się wykonać progowania");
             }
         });
@@ -420,31 +383,10 @@ public class HelloController {
 
     private void threshold(int threshold) {
         try {
-            BufferedImage bufferedImage = SwingFXUtils.fromFXImage(originalImage, null);
-
-            // zamieniamy na czarno - bialy
-            BufferedImage grayImage = new BufferedImage(
-                    bufferedImage.getWidth(),
-                    bufferedImage.getHeight(),
-                    BufferedImage.TYPE_BYTE_GRAY
-            );
-            grayImage.getGraphics().drawImage(bufferedImage, 0, 0, null);
-
-            // progowanie
-            customPool.submit(() ->
-                    IntStream.range(0, grayImage.getHeight()).parallel().forEach(y -> {
-                        for (int x = 0; x < grayImage.getWidth(); x++) {
-                            int rgb = grayImage.getRGB(x, y);
-                            int gray = rgb & 0xFF;
-                            int newValue = gray > threshold ? 255 : 0;
-                            grayImage.setRGB(x, y, (newValue << 16) | (newValue << 8) | newValue);
-                        }
-                    })).get();
-
-            // Update processed image
-            changedImage = SwingFXUtils.toFXImage(grayImage, null);
+            changedImage = filters.applyThreshold(originalImage, threshold);
             changedImageView.setImage(changedImage);
             imageChanged = true;
+            updateImageViewSize(changedImageView, changedImage);
 
         } catch (Exception e) {
             throw new RuntimeException("Thresholding failed", e);
@@ -453,45 +395,15 @@ public class HelloController {
 
     private void contour() {
         try {
-            int width = (int) originalImage.getWidth();
-            int height = (int) originalImage.getHeight();
-
-            WritableImage result = new WritableImage(width, height);
-            PixelReader reader = originalImage.getPixelReader();
-            PixelWriter writer = result.getPixelWriter();
-
-            // Sobel kernels
-            double[][] sobelX = {{-1, 0, 1}, {-2, 0, 2}, {-1, 0, 1}};
-            double[][] sobelY = {{-1, -2, -1}, {0, 0, 0}, {1, 2, 1}};
-
-            customPool.submit(() -> IntStream.range(1, height - 1).parallel().forEach(y -> {
-                for (int x = 1; x < width - 1; x++) {
-                    double pixelX = 0;
-                    double pixelY = 0;
-
-                    // Apply Sobel operator
-                    for (int i = -1; i <= 1; i++) {
-                        for (int j = -1; j <= 1; j++) {
-                            Color color = reader.getColor(x + j, y + i);
-                            double gray = 0.299 * color.getRed() +
-                                    0.587 * color.getGreen() +
-                                    0.114 * color.getBlue();
-                            pixelX += gray * sobelX[i + 1][j + 1];
-                            pixelY += gray * sobelY[i + 1][j + 1];
-                        }
-                    }
-
-                    double magnitude = Math.sqrt(pixelX * pixelX + pixelY * pixelY);
-                    double edgeValue = magnitude > 0.2 ? 1.0 : 0.0; // Threshold
-                    writer.setColor(x, y, new Color(edgeValue, edgeValue, edgeValue, 1.0));
-                }
-            })).get();
-
-            changedImage = result;
-            changedImageView.setImage(result);
+            changedImage = filters.applyContour(originalImage);
+            changedImageView.setImage(changedImage);
             imageChanged = true;
+            updateImageViewSize(changedImageView, changedImage);
+
+            Logs.logInfo("Udało się wykonać kontirowanie");
             showSuccessToast("Konturowanie zostało przeprowadzone pomyślnie!");
         } catch (Exception e) {
+            Logs.logError("Nie udało się wykonać konturowania: ", e);
             showErrorToast("Nie udało się wykonać konturowania");
         }
     }
