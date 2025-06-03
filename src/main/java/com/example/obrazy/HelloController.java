@@ -41,7 +41,7 @@ public class HelloController {
     private Image originalImage;
     private Image changedImage;
     private Boolean imageChanged = false;
-    private double totalRotation = 0; //do obracania addytywnego
+    private double totalRotation; //do obracania addytywnego
 
     private static final ForkJoinPool customPool = new ForkJoinPool(4);
 
@@ -54,6 +54,7 @@ public class HelloController {
         scaleButton.setDisable(true);
         rotateLeftBtn.setDisable(true);
         rotateRightBtn.setDisable(true);
+        totalRotation = 0;
     }
 
     @FXML
@@ -399,28 +400,30 @@ public class HelloController {
     }
 
     private void rotateImage(double angle) {
-        if(!imageChanged)
-            changedImage = originalImage;
+        try {
+            if (!imageChanged)
+                changedImage = originalImage;
 
-        totalRotation = (totalRotation + angle) % 360;
+            BufferedImage image = SwingFXUtils.fromFXImage(changedImage, null);
 
-        double pivotX = changedImage.getWidth() / 2;
-        double pivotY = changedImage.getHeight() / 2;
+            BufferedImage rotatedImage;
+            if(angle%180 == 0) {
+                rotatedImage = new BufferedImage(image.getWidth(), image.getHeight(), image.getType());
+            }
+            else{
+                rotatedImage = new BufferedImage(image.getHeight(), image.getWidth(), image.getType());
+            }
 
-        ImageView imageView = new ImageView(changedImage);
-        imageView.getTransforms().clear();
-        // Create rotation transformation
-        Rotate rotate = new Rotate(totalRotation, pivotX, pivotY);
+            java.awt.Graphics2D graphics = rotatedImage.createGraphics();
+            graphics.rotate(Math.toRadians(angle), image.getWidth() / 2.0, image.getHeight() / 2.0);
+            graphics.drawImage(image, 0, 0, null);
+            graphics.dispose();
 
-
-        imageView.getTransforms().add(rotate);
-
-        // Create snapshot of rotated image
-        WritableImage rotatedImage = imageView.snapshot(null, null);
-
-        // Update processed image
-        changedImage = rotatedImage;
-        changedImageView.setImage(rotatedImage);
+            changedImage = SwingFXUtils.toFXImage(rotatedImage, null);
+            changedImageView.setImage(changedImage);
+            imageChanged = true;
+        }
+        catch (Exception e) {showErrorToast("Nie można obrócić obrazka");}
     }
 
     private void negative() {
