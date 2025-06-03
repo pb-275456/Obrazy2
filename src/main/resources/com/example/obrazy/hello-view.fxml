@@ -35,8 +35,8 @@
             <Label text="Hello!" />
          <HBox alignment="CENTER">
             <children>
-               <ImageView fx:id="originalImageView" fitHeight="150.0" fitWidth="200.0" pickOnBounds="true" preserveRatio="true" />
-               <ImageView fx:id="changedImageView" fitHeight="150.0" fitWidth="200.0" pickOnBounds="true" preserveRatio="true" />
+               <ImageView fx:id="originalImageView" fitHeight="200" fitWidth="200" pickOnBounds="true" preserveRatio="true" />
+               <ImageView fx:id="changedImageView" fitHeight="200" fitWidth="200" pickOnBounds="true" preserveRatio="true" />
             </children>
          </HBox>
 
@@ -45,7 +45,7 @@
                     <FXCollections fx:factory="observableArrayList">
                         <String fx:value="Negatyw" />
                         <String fx:value="Progowanie" />
-                        <String fx:value="test3" />
+                        <String fx:value="Kontur" />
                     </FXCollections>
                 </items>
             </ComboBox>
